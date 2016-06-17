@@ -1,5 +1,5 @@
 <?php
-
+include('CheckMacValue.php');
 /**
  * 付款方式。
  */
@@ -414,6 +414,8 @@ abstract class EncryptType {
 class AllInOne {
 
     public $ServiceURL = 'ServiceURL';
+    public $ServerReplyURL = 'ServerReplyURL';//绑定信用卡服务端回调地址
+    public $ClientRedirectURL = 'ClientRedirectURL';//Client 端回傳修改卡號相關資訊的網址
     public $ServiceMethod = 'ServiceMethod';
     public $HashKey = 'HashKey';
     public $HashIV = 'HashIV';
@@ -425,6 +427,7 @@ class AllInOne {
     public $Action = 'Action';
     public $ChargeBack = 'ChargeBack';
     public $EncryptType = EncryptType::ENC_MD5;
+
 
     function __construct() {
         $this->AllInOne();
@@ -1160,19 +1163,7 @@ class AllInOne {
             // CheckMacValue 壓碼
             $szCheckMacValue = $this->EncCheckMacValue($szCheckMacValue, $this->Send['EncryptType']);
 
-            $szHtml = '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />';
-            $szHtml .= '<div style="text-align:center;" ><form id="__allpayForm" method="post" target="' . $target . '" action="' . $this->ServiceURL . '">';
-            foreach ($arParameters as $keys => $value) {
-                $szHtml .="<input type='hidden' name='$keys' value='$value' />";
-            }
-            $szHtml .= '<input type="hidden" name="CheckMacValue" value="' . $szCheckMacValue . '" />';
-            // 手動或自動送出表單。
-            if (!isset($paymentButton)) {
-                $szHtml .= '<script type="text/javascript">document.getElementById("__allpayForm").submit();</script>';
-            } else {
-                $szHtml .= '<input type="submit" id="__paymentButton" value="' . $paymentButton . '" />';
-            }
-            $szHtml .= '</form></div>';
+            $szHtml = $this->buildForm($target,$arParameters,$szCheckMacValue);
         }
 
         if (sizeof($arErrors) > 0) {
@@ -1660,6 +1651,101 @@ class AllInOne {
 
         return $rs;
     }
+    //绑定信用卡
+    function bindCreditCard($MerchantMemberID,$target="_self") {
+        $params = [
+            'MerchantID' => $this->MerchantID,
+            'MerchantMemberID' => $MerchantMemberID,
+            'ServerReplyURL' => $this->ServerReplyURL,
+            'ClientRedirectURL' => $this->ClientRedirectURL
+        ];
+        $szCheckMacValue = CheckMacValue::generate($params,$this->HashKey,$this->HashIV,EncryptType::ENC_SHA256);
+        $szHtml = $this->buildForm($target,$params,$szCheckMacValue,$this->ServiceURL);
+        return $szHtml;
+    }
+    //查询绑定信用卡
+    function creditCardList($MerchantMemberID) {
+        $params = [
+            'MerchantID' => $this->MerchantID,
+            'MerchantMemberID' => $MerchantMemberID
+        ];
+        $szCheckMacValue = CheckMacValue::generate($params,$this->HashKey,$this->HashIV,EncryptType::ENC_SHA256);
+        $params['CheckMacValue'] = $szCheckMacValue;
+        $response = $this->ServerPost($params);
+        return $response;
+    }
+    //信用卡授权
+    function creditCardAuth($parameters) {
+        $arErrors = array();
+        if (strlen($this->HashKey) == 0) {
+            array_push($arErrors, 'HashKey is required.');
+        }
+        if (strlen($this->HashIV) == 0) {
+            array_push($arErrors, 'HashIV is required.');
+        }
+        if (strlen($this->MerchantID) == 0) {
+            array_push($arErrors, 'MerchantID is required.');
+        }
+        if (strlen($this->MerchantID) > 10) {
+            array_push($arErrors, 'MerchantID max langth as 10.');
+        }
+        if (!isset($parameters['MerchantTradeNo'])) {
+            array_push($arErrors,'MerchantTradeNo is required');
+        }
+        if (!isset($parameters['MerchantTradeDate'])) {
+            array_push($arErrors,'MerchantTradeDate is required');
+        }
+        if (!isset($parameters['TotalAmount'])) {
+            array_push($arErrors,'TotalAmount is required');
+        }
+        if (!isset($parameters['TradeDesc'])) {
+            array_push($arErrors,'TradeDesc is required');
+        }
+        if (!isset($parameters['CardID'])) {
+            array_push($arErrors,'CardID is required');
+        }
+        if (!isset($parameters['stage'])) {
+            array_push($arErrors,'stage is required');
+        }
+        if (sizeof($arErrors) > 0) {
+            throw new Exception(join('- ', $arErrors));
+        }
+        $parameters['MerchantID'] = $this->MerchantID;
+        $szCheckMacValue = CheckMacValue::generate($parameters,$this->HashKey,$this->HashIV,EncryptType::ENC_SHA256);
+        $response = $this->buildForm('_blank',$parameters,$szCheckMacValue);
+        return $response;
+    }
+
+    function queryCreditOrder($MerchantMemberID) {
+        $parameters['MerchantID'] = $this->MerchantID;
+        $parameters['MerchantMemberID'] = $MerchantMemberID;
+        $szCheckMacValue = CheckMacValue::generate($parameters,$this->HashKey,$this->HashIV,EncryptType::ENC_SHA256);
+        $parameters['CheckMacValue'] = $szCheckMacValue;
+        $response = $this->ServerPost($parameters);
+        return $response;
+    }
+
+    function creditBindOrder($parameters,$target = "_blank") {
+        $parameters['MerchantID'] = $this->MerchantID;
+        $szCheckMacValue = CheckMacValue::generate($parameters,$this->HashKey,$this->HashIV,EncryptType::ENC_SHA256);
+        $szForm = $this->buildForm($target,$parameters,$szCheckMacValue);
+        return $szForm;
+    }
+
+    function deleteCredit($parameters) {
+        $parameters['MerchantID'] = $this->MerchantID;
+        $szCheckMacValue = CheckMacValue::generate($parameters,$this->HashKey,$this->HashIV,EncryptType::ENC_SHA256);
+        $parameters['CheckMacValue'] = $szCheckMacValue;
+        $response = $this->ServerPost($parameters);
+        return $response;
+    }
+
+    function updateCredit($parameters) {
+        $parameters['MerchantID'] = $this->MerchantID;
+        $szCheckMacValue = CheckMacValue::generate($parameters,$this->HashKey,$this->HashIV,EncryptType::ENC_SHA256);
+        $szForm = $this->buildForm('_self',$parameters,$szCheckMacValue);
+        return $szForm;
+    }
 
     /**
      * 自訂排序使用
@@ -1684,4 +1770,20 @@ class AllInOne {
         return $szCheckMacValue;
     }
 
+    private function buildForm($target,$arParameters,$szCheckMacValue,$paymentButton=false) {
+        $szHtml = '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />';
+        $szHtml .= '<div style="text-align:center;" ><form id="__allpayForm" method="post" target="' . $target . '" action="' . $this->ServiceURL . '">';
+        foreach ($arParameters as $keys => $value) {
+            $szHtml .="<input type='text' name='$keys' value='$value' />";
+        }
+        $szHtml .= '<input type="text" name="CheckMacValue" value="' . $szCheckMacValue . '" />';
+        // 手動或自動送出表單。
+        if (!isset($paymentButton)) {
+            $szHtml .= '<script type="text/javascript">document.getElementById("__allpayForm").submit();</script>';
+        } else {
+            $szHtml .= '<input type="submit" id="__paymentButton" value="' . $paymentButton . '" />';
+        }
+        $szHtml .= '</form></div>';
+        return $szHtml;
+    }
 }
