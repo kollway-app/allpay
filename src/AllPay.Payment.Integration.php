@@ -1770,7 +1770,7 @@ class AllInOne {
         return $szCheckMacValue;
     }
 
-    private function buildForm($target,$arParameters,$szCheckMacValue,$paymentButton=false) {
+    private function buildForm($target,$arParameters,$szCheckMacValue) {
         $szHtml = '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />';
         $szHtml .= '<div style="text-align:center;" ><form id="__allpayForm" method="post" target="' . $target . '" action="' . $this->ServiceURL . '">';
         foreach ($arParameters as $keys => $value) {
