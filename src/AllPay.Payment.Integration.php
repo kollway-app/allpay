@@ -1663,6 +1663,20 @@ class AllInOne {
         $szHtml = $this->buildForm($target,$params,$szCheckMacValue,$this->ServiceURL);
         return $szHtml;
     }
+
+    function queryOrder($MerchantTradeNo) {
+        if (!$MerchantTradeNo) {
+            return false;
+        }
+        $params['MerchantTradeNo'] = $MerchantTradeNo;
+        $params['TimeStamp'] = time();
+        $szCheckMacValue = CheckMacValue::generate($params,$this->HashKey,$this->HashIV,EncryptType::ENC_SHA256);
+        $params['CheckMacValue'] = $szCheckMacValue;
+        $response = $this->ServerPost($params);
+        return $response;
+    }
+
+
     //查询绑定信用卡
     function creditCardList($MerchantMemberID) {
         $params = [
@@ -1712,7 +1726,8 @@ class AllInOne {
         }
         $parameters['MerchantID'] = $this->MerchantID;
         $szCheckMacValue = CheckMacValue::generate($parameters,$this->HashKey,$this->HashIV,EncryptType::ENC_SHA256);
-        $response = $this->buildForm('_blank',$parameters,$szCheckMacValue);
+        $parameters['CheckMacValue'] = $szCheckMacValue;
+        $response = $this->ServerPost($parameters);
         return $response;
     }
 
