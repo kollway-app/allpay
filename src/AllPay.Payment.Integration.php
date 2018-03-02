@@ -1,5 +1,4 @@
 <?php
-include('CheckMacValue.php');
 /**
  * 付款方式。
  */
